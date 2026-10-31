@@ -10,8 +10,9 @@ Es necesario porque TikTok no ofrece una API publica para leer el chat.
    - La primera vez descarga las dependencias con `npm install`.
 3. Deja la ventana abierta. Debe mostrar:
    `Escuchando en ws://127.0.0.1:8787`
-4. En Minecraft: `/streamchat connect tiktok TU_USUARIO`.
-5. El usuario debe estar en directo.
+4. En Minecraft: `/streamchat add tiktok TU_USUARIO`.
+5. El usuario debe estar en directo y con el chat habilitado; veras sus comentarios
+   en el overlay como `[TikTok] Nombre: mensaje`.
 
 ## Configuracion
 

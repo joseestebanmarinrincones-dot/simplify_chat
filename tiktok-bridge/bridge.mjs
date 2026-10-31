@@ -24,6 +24,9 @@ const clients = new Set();
 
 let connection = null;
 let currentChannel = null;
+const seenMessageIds = new Set();
+const seenMessageOrder = [];
+const MAX_SEEN_MESSAGES = 2000;
 let retryTimer = null;
 let retryCount = 0;
 
@@ -126,22 +129,33 @@ async function join(rawChannel, isRetry = false) {
 
   await leave();
   if (!isRetry) retryCount = 0;
+  seenMessageIds.clear();
+  seenMessageOrder.length = 0;
   currentChannel = channel;
   sendStatus("connecting", `Conectando a TikTok @${channel}...`);
 
   const live = new TikTokLiveConnection(channel, {
     signApiKey,
-    processInitialData: false,
+    processInitialData: true,
     fetchRoomInfoOnConnect: true,
   });
   connection = live;
 
   live.on(WebcastEvent.CHAT, (data) => {
-    const user = data?.user?.uniqueId ?? data?.user?.userId ?? "tiktok";
-    const displayName = data?.user?.nickname || user;
-    const message = data?.comment ?? "";
+    const user = data?.user?.uniqueId ?? data?.user?.userId ?? data?.user?.id ?? "tiktok";
+    const displayName = data?.user?.nickname || data?.user?.displayName || user;
+    const message = data?.comment ?? data?.content ?? "";
     if (!message) return;
-    console.log(`[chat] ${user}: ${message}`);
+    const messageId = data?.common?.msgId ? String(data.common.msgId) : "";
+    if (messageId) {
+      if (seenMessageIds.has(messageId)) return;
+      seenMessageIds.add(messageId);
+      seenMessageOrder.push(messageId);
+      while (seenMessageOrder.length > MAX_SEEN_MESSAGES) {
+        seenMessageIds.delete(seenMessageOrder.shift());
+      }
+    }
+    console.log(`[chat] ${displayName}: ${message}`);
     broadcast({
       type: "chat",
       platform: "tiktok",
@@ -171,13 +185,7 @@ async function join(rawChannel, isRetry = false) {
   try {
     const state = await live.connect();
     retryCount = 0;
-    const stats = live.roomInfo?.stats ?? live.roomInfo?.data?.stats;
-    const comments = Number(stats?.comment_count ?? -1);
-    if (comments === 0) {
-      sendStatus("connected", `TikTok @${channel} conectado, pero el directo no reporta comentarios (el chat puede estar deshabilitado).`);
-    } else {
-      sendStatus("connected", `TikTok @${channel} conectado (roomId ${state?.roomId ?? "?"}).`);
-    }
+    sendStatus("connected", `TikTok @${channel} conectado (roomId ${state?.roomId ?? "?"}).`);
   } catch (error) {
     const message = formatError(error);
     if (isOfflineError(error)) {
