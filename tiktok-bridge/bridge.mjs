@@ -24,6 +24,7 @@ const clients = new Set();
 
 let connection = null;
 let currentChannel = null;
+let lastJoinedChannel = null;
 const seenMessageIds = new Set();
 const seenMessageOrder = [];
 const recentFingerprints = new Map();
@@ -129,14 +130,15 @@ async function join(rawChannel, isRetry = false) {
     return;
   }
 
-  const previousChannel = currentChannel;
+  const sameChannel = lastJoinedChannel === channel;
   await leave();
   if (!isRetry) retryCount = 0;
-  if (previousChannel !== channel) {
+  if (!sameChannel) {
     seenMessageIds.clear();
     seenMessageOrder.length = 0;
     recentFingerprints.clear();
   }
+  lastJoinedChannel = channel;
   currentChannel = channel;
   sendStatus("connecting", `Conectando a TikTok @${channel}...`);
 
