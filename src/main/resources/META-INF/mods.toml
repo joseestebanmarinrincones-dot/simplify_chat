@@ -1,0 +1,30 @@
+modLoader="javafml"
+loaderVersion="[66,)"
+license="MIT"
+clientSideOnly=true
+
+[[mods]]
+modId="streamchat"
+version="1.0.0"
+displayName="Simplify Chat"
+authors="Gamer"
+description='''
+Simplify Chat muestra los mensajes de Twitch, Kick y TikTok en un overlay transparente dentro de Minecraft,
+con mensajes apilados, colores de usuario y desvanecimiento suave.
+La integracion con TikTok usa un pequeno puente local incluido en la carpeta tiktok-bridge.
+Los mensajes se leen de forma anonima y nunca se envia nada a las plataformas.
+'''
+
+[[dependencies.streamchat]]
+    modId="forge"
+    mandatory=true
+    versionRange="[66,)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.streamchat]]
+    modId="minecraft"
+    mandatory=true
+    versionRange="[26.3,26.4)"
+    ordering="NONE"
+    side="BOTH"

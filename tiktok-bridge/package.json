@@ -1,0 +1,14 @@
+{
+  "name": "streamchat-tiktok-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Puente local entre TikTok LIVE y el mod StreamChat de Minecraft",
+  "scripts": {
+    "start": "node bridge.mjs"
+  },
+  "dependencies": {
+    "tiktok-live-connector": "^2.5.0",
+    "ws": "^8.22.0"
+  }
+}

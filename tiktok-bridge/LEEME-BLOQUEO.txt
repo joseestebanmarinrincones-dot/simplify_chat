@@ -1,0 +1,34 @@
+Si Windows bloquea "iniciar-puente.bat"
+======================================
+
+No es un virus. Windows SmartScreen y Windows Defender desconfian de los
+archivos .bat que vienen dentro de un ZIP o que ejecutan npm/node.
+
+Opcion 1: usar el .bat normalmente
+----------------------------------
+Doble clic en iniciar-puente.bat. Si aparece "Windows protegio tu PC":
+- Pulsa "Mas informacion".
+- Pulsa "Ejecutar de todas formas".
+
+Opcion 2: sin .bat (recomendada si esta bloqueado)
+--------------------------------------------------
+Abre PowerShell en la carpeta tiktok-bridge y ejecuta:
+
+    npm install --no-audit --no-fund
+    node bridge.mjs
+
+La primera linea solo hace falta la primera vez. Deja la ventana abierta.
+
+Opcion 3: desbloquear el archivo
+--------------------------------
+Si el ZIP vino de Internet, antes de extraerlo:
+- Clic derecho en el ZIP -> Propiedades -> marcar "Desbloquear" -> Aplicar.
+
+O, con el archivo ya extraido, abre PowerShell y ejecuta:
+
+    Unblock-File -LiteralPath "C:\ruta\a\tiktok-bridge\iniciar-puente.bat"
+
+Tambien puedes hacer clic derecho en el .bat -> Propiedades -> Desbloquear.
+
+El puente solo se conecta a TikTok y escucha en 127.0.0.1:8787. No envia
+tus contrasenas ni modifica archivos del sistema.

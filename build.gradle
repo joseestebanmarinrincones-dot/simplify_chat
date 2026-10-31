@@ -1,0 +1,61 @@
+plugins {
+    id 'java'
+    id 'idea'
+    id 'eclipse'
+    id 'net.minecraftforge.gradle' version '[7.0.17,8)'
+}
+
+version = '1.0.0'
+group = 'dev.streamchat'
+
+base {
+    archivesName = 'simplify_chat'
+}
+
+// Minecraft 26.1+ ships Java 25, so the mod targets Java 25.
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+
+minecraft {
+    runs {
+        configureEach {
+            workingDir = layout.projectDirectory.dir('run')
+
+            systemProperty 'eventbus.api.strictRuntimeChecks', 'true'
+        }
+
+        register('client')
+    }
+}
+
+repositories {
+    minecraft.mavenizer(it)
+    maven fg.forgeMaven
+    maven fg.minecraftLibsMaven
+    mavenCentral()
+}
+
+dependencies {
+    implementation minecraft.dependency('net.minecraftforge:forge:26.3-66.1.2')
+    annotationProcessor 'net.minecraftforge:eventbus-validator:7.0.6'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+// Paquete listo para repartir el puente de TikTok (sin node_modules).
+tasks.register('bridgeZip', Zip) {
+    archiveFileName = 'simplify_chat-tiktok-bridge.zip'
+    destinationDirectory = layout.buildDirectory.dir('libs')
+    from('tiktok-bridge') {
+        exclude 'node_modules/**'
+        exclude '*.lnk'
+    }
+}
+
+tasks.named('build') {
+    dependsOn 'bridgeZip'
+}
+
+
+
