@@ -387,7 +387,7 @@ public final class EmoteManager {
             if (fallback == null) {
                 fallback = file;
             }
-            if (animated && ChatConfig.emotesAnimated && "GIF".equals(format)) {
+            if (animated && "GIF".equals(format)) {
                 chosen = file;
                 break;
             }
