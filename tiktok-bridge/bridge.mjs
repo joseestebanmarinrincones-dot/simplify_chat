@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { WebSocketServer } from "ws";
-import { TikTokLiveConnection } from "tiktok-live-connector";
+import { TikTokLiveConnection, WebcastEvent } from "tiktok-live-connector";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const configPath = path.join(here, "config.json");
@@ -136,11 +136,12 @@ async function join(rawChannel, isRetry = false) {
   });
   connection = live;
 
-  live.on("chat", (data) => {
+  live.on(WebcastEvent.CHAT, (data) => {
     const user = data?.user?.uniqueId ?? data?.user?.userId ?? "tiktok";
     const displayName = data?.user?.nickname || user;
     const message = data?.comment ?? "";
     if (!message) return;
+    console.log(`[chat] ${user}: ${message}`);
     broadcast({
       type: "chat",
       platform: "tiktok",
@@ -170,7 +171,13 @@ async function join(rawChannel, isRetry = false) {
   try {
     const state = await live.connect();
     retryCount = 0;
-    sendStatus("connected", `TikTok @${channel} conectado (roomId ${state?.roomId ?? "?"}).`);
+    const stats = live.roomInfo?.stats ?? live.roomInfo?.data?.stats;
+    const comments = Number(stats?.comment_count ?? -1);
+    if (comments === 0) {
+      sendStatus("connected", `TikTok @${channel} conectado, pero el directo no reporta comentarios (el chat puede estar deshabilitado).`);
+    } else {
+      sendStatus("connected", `TikTok @${channel} conectado (roomId ${state?.roomId ?? "?"}).`);
+    }
   } catch (error) {
     const message = formatError(error);
     if (isOfflineError(error)) {

@@ -9,6 +9,27 @@ Minecraft.
 Es de **solo lectura**: nunca envia mensajes ni pide contraseñas. Twitch y Kick se conectan
 directamente; TikTok usa un pequeno puente local incluido en el proyecto.
 
+## Versiones
+
+| Minecraft | Forge | Java | Jar |
+|---|---|---|---|
+| 1.16.5 | 36.2.42 | 11+ | `simplify_chat-1.16.5-1.0.0.jar` |
+| 1.20.1 | 47.4.28 | 17 | `simplify_chat-1.20.1-1.0.0.jar` |
+| 1.21.1 | 52.1.20 | 21 | `simplify_chat-1.21.1-1.0.0.jar` |
+| 1.21.8 | 58.1.26 | 21 | `simplify_chat-1.21.8-1.0.0.jar` |
+| 26.3 | 66.1.2 | 25 | `simplify_chat-1.0.0.jar` |
+
+La version 1.16.5 usa Java 11 o superior por el cliente WebSocket/HTTP. Las demas usan la
+version de Java que exige su Minecraft.
+
+Cada version es un proyecto independiente dentro de `versions/`. Para compilar una:
+
+```bat
+cd versions\1.20.1
+gradlew.bat build
+```
+
+El jar queda en `versions/1.20.1/build/libs/`.
 ## Requisitos
 
 - Minecraft **26.3**
