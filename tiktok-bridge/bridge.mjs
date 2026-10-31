@@ -26,7 +26,9 @@ let connection = null;
 let currentChannel = null;
 const seenMessageIds = new Set();
 const seenMessageOrder = [];
+const recentFingerprints = new Map();
 const MAX_SEEN_MESSAGES = 2000;
+const DUPLICATE_WINDOW_MS = 4000;
 let retryTimer = null;
 let retryCount = 0;
 
@@ -127,10 +129,14 @@ async function join(rawChannel, isRetry = false) {
     return;
   }
 
+  const previousChannel = currentChannel;
   await leave();
   if (!isRetry) retryCount = 0;
-  seenMessageIds.clear();
-  seenMessageOrder.length = 0;
+  if (previousChannel !== channel) {
+    seenMessageIds.clear();
+    seenMessageOrder.length = 0;
+    recentFingerprints.clear();
+  }
   currentChannel = channel;
   sendStatus("connecting", `Conectando a TikTok @${channel}...`);
 
@@ -153,6 +159,18 @@ async function join(rawChannel, isRetry = false) {
       seenMessageOrder.push(messageId);
       while (seenMessageOrder.length > MAX_SEEN_MESSAGES) {
         seenMessageIds.delete(seenMessageOrder.shift());
+      }
+    }
+    const fingerprint = `${user}|${message}`;
+    const now = Date.now();
+    const previous = recentFingerprints.get(fingerprint);
+    if (previous && now - previous < DUPLICATE_WINDOW_MS) return;
+    recentFingerprints.set(fingerprint, now);
+    if (recentFingerprints.size > MAX_SEEN_MESSAGES) {
+      for (const [key, timestamp] of recentFingerprints) {
+        if (now - timestamp > DUPLICATE_WINDOW_MS * 4) {
+          recentFingerprints.delete(key);
+        }
       }
     }
     console.log(`[chat] ${displayName}: ${message}`);
