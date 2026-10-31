@@ -1,24 +1,33 @@
-Simplify Chat 1.0.0 - versiones
+Simplify Chat 1.1.0 - versiones
 ================================
 
-Elegí el jar de tu version de Minecraft y copialo a:
+Elegí el jar de tu versión de Minecraft y copialo a:
 
     %APPDATA%\.minecraft\mods
 
 | Minecraft | Forge | Java | Jar |
 |---|---|---|---|
-| 1.16.5 | 36.2.42 | 11+ | simplify_chat-1.16.5-1.0.0.jar |
-| 1.20.1 | 47.4.28 | 17 | simplify_chat-1.20.1-1.0.0.jar |
-| 1.21.1 | 52.1.20 | 21 | simplify_chat-1.21.1-1.0.0.jar |
-| 1.21.8 | 58.1.26 | 21 | simplify_chat-1.21.8-1.0.0.jar |
-| 26.3 | 66.1.2 | 25 | simplify_chat-26.3-1.0.0.jar |
+| 1.16.5 | 36.2.42 | 11+ | simplify_chat-1.16.5-1.1.0.jar |
+| 1.20.1 | 47.4.28 | 17 | simplify_chat-1.20.1-1.1.0.jar |
+| 1.21.1 | 52.1.20 | 21 | simplify_chat-1.21.1-1.1.0.jar |
+| 1.21.8 | 58.1.26 | 21 | simplify_chat-1.21.8-1.1.0.jar |
+| 26.3 | 66.1.2 | 25 | simplify_chat-26.3-1.1.0.jar |
 
 No mezcles dos jars del mod en la misma carpeta mods.
 
+Novedades 1.1.0:
+- Varios chats a la vez (Twitch + Kick + TikTok).
+- Emotes de BTTV, FFZ y 7TV con imágenes reales y GIF animados.
+- Panel F7 con tamaño de emote y controles para activar/desactivar emotes.
+
 Comandos:
-/streamchat connect twitch TU_CANAL
-/streamchat connect kick TU_CANAL
-/streamchat connect tiktok TU_USUARIO
+/streamchat add twitch TU_CANAL
+/streamchat add kick TU_CANAL
+/streamchat add tiktok TU_USUARIO
+/streamchat sources
+/streamchat emotes on|off
+/streamchat emotes animated on|off
+/streamchat emotes size 8-28
 /streamchat panel  (o F7)
 /streamchat status
 

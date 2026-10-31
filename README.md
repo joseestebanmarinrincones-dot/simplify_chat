@@ -1,4 +1,4 @@
-# Simplify Chat para Minecraft 26.3 (Forge)
+# Simplify Chat para Minecraft (Forge)
 
 Mod de cliente que muestra los mensajes de **Twitch**, **Kick** y **TikTok** en un **overlay
 transparente dentro del juego**, inspirado en
@@ -9,15 +9,18 @@ Minecraft.
 Es de **solo lectura**: nunca envia mensajes ni pide contraseñas. Twitch y Kick se conectan
 directamente; TikTok usa un pequeno puente local incluido en el proyecto.
 
+Puedes tener **Twitch, Kick y TikTok conectados a la vez**. Los emotes de **BTTV, FFZ y 7TV**
+se muestran como imagenes reales dentro del overlay, incluidos los **GIF animados**.
+
 ## Versiones
 
 | Minecraft | Forge | Java | Jar |
 |---|---|---|---|
-| 1.16.5 | 36.2.42 | 11+ | `simplify_chat-1.16.5-1.0.0.jar` |
-| 1.20.1 | 47.4.28 | 17 | `simplify_chat-1.20.1-1.0.0.jar` |
-| 1.21.1 | 52.1.20 | 21 | `simplify_chat-1.21.1-1.0.0.jar` |
-| 1.21.8 | 58.1.26 | 21 | `simplify_chat-1.21.8-1.0.0.jar` |
-| 26.3 | 66.1.2 | 25 | `simplify_chat-1.0.0.jar` |
+| 1.16.5 | 36.2.42 | 11+ | `simplify_chat-1.16.5-1.1.0.jar` |
+| 1.20.1 | 47.4.28 | 17 | `simplify_chat-1.20.1-1.1.0.jar` |
+| 1.21.1 | 52.1.20 | 21 | `simplify_chat-1.21.1-1.1.0.jar` |
+| 1.21.8 | 58.1.26 | 21 | `simplify_chat-1.21.8-1.1.0.jar` |
+| 26.3 | 66.1.2 | 25 | `simplify_chat-1.1.0.jar` |
 
 La version 1.16.5 usa Java 11 o superior por el cliente WebSocket/HTTP. Las demas usan la
 version de Java que exige su Minecraft.
@@ -52,13 +55,13 @@ gradlew.bat build
 
 El resultado queda en:
 
-- `build/libs/simplify_chat-1.0.0.jar` - el mod
+- `build/libs/simplify_chat-1.1.0.jar` - el mod
 - `build/libs/simplify_chat-tiktok-bridge.zip` - el puente de TikTok (opcional)
 
 ## Instalar
 
 1. Instala Forge 26.3-66.1.2 con el instalador oficial y crea el perfil en el launcher.
-2. Copia `simplify_chat-1.0.0.jar` a `%APPDATA%\.minecraft\mods`.
+2. Copia `simplify_chat-1.1.0.jar` a `%APPDATA%\.minecraft\mods`.
 3. Inicia Minecraft con el perfil de Forge.
 4. Si usas TikTok, descomprime `simplify_chat-tiktok-bridge.zip` donde quieras y ejecuta
    `iniciar-puente.bat` (la primera vez instala las dependencias de Node).
@@ -71,18 +74,25 @@ El resultado queda en:
 Dentro del juego:
 
 ```text
-/streamchat connect twitch TU_CANAL
-/streamchat connect kick TU_CANAL
-/streamchat connect tiktok TU_USUARIO
+/streamchat add twitch TU_CANAL
+/streamchat add kick TU_CANAL
+/streamchat add tiktok TU_USUARIO
 ```
+
+`add` agrega una fuente sin desconectar las demas. Tambien puedes usar
+`/streamchat connect twitch TU_CANAL` para agregar y conectar.
 
 Otros comandos:
 
 ```text
+/streamchat sources
 /streamchat status
+/streamchat remove <plataforma> [canal]
 /streamchat disconnect
-/streamchat platform <twitch|kick|tiktok>
-/streamchat channel <canal>
+/streamchat emotes on|off
+/streamchat emotes animated on|off
+/streamchat emotes size <8-28>
+/streamchat emotes reload
 /streamchat test
 /streamchat panel
 /streamchat overlay on|off|clear
@@ -90,8 +100,14 @@ Otros comandos:
 /streamchat bridge
 ```
 
-Al entrar a un mundo, el mod se conecta automaticamente si `enabled` es `true` y hay un canal
-guardado. La configuracion esta en `config/streamchat-client.toml` (se crea en el primer arranque).
+Al entrar a un mundo, el mod se conecta automaticamente si `enabled` es `true` y hay fuentes
+guardadas. La configuracion esta en `config/streamchat-client.toml` (se crea en el primer arranque).
+Las fuentes se guardan como lista, por ejemplo:
+
+```toml
+[general]
+sources = ["twitch:ibai", "kick:ibai", "tiktok:usuario"]
+```
 
 ## Panel de ajustes (F7)
 
@@ -102,11 +118,27 @@ tocar archivos:
 - Margen X/Y, tamano del texto (escala), ancho.
 - Opacidad del texto y del fondo.
 - Color de Twitch, Kick, TikTok, mensajes, avisos, errores, fondo y separadores.
+- Tamano de emote, activar/desactivar emotes y animaciones.
 - Etiqueta de plataforma, formato del mensaje y prefijo de avisos.
 - Vista previa en vivo.
 
 Los cambios se aplican al instante y se guardan en `config/streamchat-client.toml`. La tecla se
 puede cambiar en **Opciones -> Controles -> Simplify Chat**. Si F7 choca con otra tecla, reasignala ahi.
+
+## Emotes (BTTV, FFZ y 7TV)
+
+Al conectar, el mod descarga la lista global y la lista propia de cada canal de Twitch/Kick.
+Cada codigo que coincida se dibuja como imagen dentro del mensaje, con su tamano original y
+animacion si el proveedor entrega un GIF.
+
+- `emotes.enabled`: activa o desactiva las imagenes.
+- `emotes.animated`: reproduce los GIF animados.
+- `emotes.channelSpecific`: carga tambien los emotes del canal.
+- `emotes.size`: altura en pixeles de GUI (8-28).
+- `emotes.providers`: lista de proveedores, por defecto `["bttv", "ffz", "7tv"]`.
+- Las imagenes se guardan en `config/streamchat-emotes` para no descargarlas cada vez.
+- Los emotes de Twitch nativos no se descargan; se muestran como texto. BTTV, FFZ y 7TV si
+  se muestran como imagen.
 
 ## Overlay
 
@@ -153,6 +185,16 @@ Configuracion del overlay:
 | `messageFormat` | `{tag}{name}: {message}` | Formato del mensaje |
 | `systemPrefix` | `[Simplify] ` | Prefijo de los avisos |
 | `textShadow` | `true` | Sombra del texto |
+
+Opciones de `[emotes]`:
+
+| Opcion | Por defecto | Descripcion |
+|---|---|---|
+| `enabled` | `true` | Mostrar imagenes de emotes |
+| `animated` | `true` | Reproducir GIF animados |
+| `channelSpecific` | `true` | Cargar emotes del canal |
+| `size` | `12` | Altura del emote en pixeles |
+| `providers` | `["bttv","ffz","7tv"]` | Proveedores activos |
 
 Ejemplos de comandos:
 
@@ -229,7 +271,8 @@ y ponlos en la seccion `[kick]` del TOML:
 ## Notas y limitaciones
 
 - Solo lectura. Para escribir en el chat harian falta tokens OAuth y no esta incluido.
-- Los emotes de Twitch/Kick se muestran como texto (`:nombre:`), no como imagenes.
+- BTTV, FFZ y 7TV se muestran como imagenes (incluidos GIF animados). Los emotes nativos de
+  Twitch que no esten en esos proveedores se muestran como texto.
 - TikTok es un protocolo no oficial: si TikTok cambia algo, actualiza el paquete del puente con
   `npm update` dentro de `tiktok-bridge`.
 - El mod no envia tu IP, cookies ni credenciales a ningun sitio. Twitch y Kick se leen de forma

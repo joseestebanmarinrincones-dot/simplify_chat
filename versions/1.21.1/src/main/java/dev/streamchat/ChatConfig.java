@@ -2,7 +2,9 @@ package dev.streamchat;
 
 import net.minecraftforge.common.ForgeConfigSpec;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -17,6 +19,7 @@ public final class ChatConfig {
     private static final ForgeConfigSpec.BooleanValue ENABLED;
     private static final ForgeConfigSpec.ConfigValue<String> PLATFORM;
     private static final ForgeConfigSpec.ConfigValue<String> CHANNEL;
+    private static final ForgeConfigSpec.ConfigValue<List<? extends String>> SOURCES;
     private static final ForgeConfigSpec.BooleanValue ANNOUNCE_STATUS;
     private static final ForgeConfigSpec.BooleanValue SHOW_PLATFORM_TAG;
     private static final ForgeConfigSpec.BooleanValue SHOW_NAME_COLORS;
@@ -51,12 +54,18 @@ public final class ChatConfig {
     private static final ForgeConfigSpec.ConfigValue<String> OVERLAY_PLATFORM_TAG;
     private static final ForgeConfigSpec.ConfigValue<String> OVERLAY_MESSAGE_FORMAT;
     private static final ForgeConfigSpec.ConfigValue<String> OVERLAY_SYSTEM_PREFIX;
+    private static final ForgeConfigSpec.BooleanValue EMOTES_ENABLED;
+    private static final ForgeConfigSpec.BooleanValue EMOTES_ANIMATED;
+    private static final ForgeConfigSpec.BooleanValue EMOTES_CHANNEL_SPECIFIC;
+    private static final ForgeConfigSpec.IntValue EMOTES_SIZE;
+    private static final ForgeConfigSpec.ConfigValue<List<? extends String>> EMOTES_PROVIDERS;
 
     // Valores cacheados para no tocar el spec desde hilos de red.
     public static volatile boolean enabled = true;
     public static volatile boolean announceStatus = true;
     public static volatile String platform = "twitch";
     public static volatile String channel = "";
+    public static volatile List<ChatSource> sources = List.of();
     public static volatile boolean showPlatformTag = true;
     public static volatile boolean showNameColors = true;
     public static volatile boolean ignoreCommands = true;
@@ -92,6 +101,12 @@ public final class ChatConfig {
     public static volatile String overlayMessageFormat = "{tag}{name}: {message}";
     public static volatile String overlaySystemPrefix = "[Simplify] ";
 
+    public static volatile boolean emotesEnabled = true;
+    public static volatile boolean emotesAnimated = true;
+    public static volatile boolean emotesChannelSpecific = true;
+    public static volatile int emotesSize = 12;
+    public static volatile Set<String> emoteProviders = Set.of("bttv", "ffz", "7tv");
+
     static {
         ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
 
@@ -110,9 +125,16 @@ public final class ChatConfig {
                 .define("platform", "twitch");
 
         CHANNEL = builder
-                .comment("Canal por defecto. En Twitch/Kick es el nombre sin @.",
-                        "En TikTok es el usuario sin @. Puedes cambiarlo con /streamchat channel <nombre>.")
+                .comment("Canal antiguo de una sola fuente. Se usa solo si sources esta vacio.",
+                        "En Twitch/Kick es el nombre sin @. En TikTok es el usuario sin @.")
                 .define("channel", "");
+
+        SOURCES = builder
+                .comment("Lista de chats conectados a la vez, con formato plataforma:canal.",
+                        "Ejemplo: [\"twitch:ibai\", \"kick:ibai\", \"tiktok:usuario\"].",
+                        "Si esta lista tiene entradas, platform/channel se ignoran.",
+                        "Tambien puedes usar /streamchat add <plataforma> <canal>.")
+                .defineListAllowEmpty("sources", List.of(), value -> value instanceof String);
 
         ANNOUNCE_STATUS = builder
                 .comment("Mostrar en el chat los avisos de conexion, errores y reconexiones.")
@@ -268,6 +290,34 @@ public final class ChatConfig {
 
         builder.pop();
 
+        builder.comment(
+                "Emotes de BTTV, FFZ y 7TV con sus imagenes reales dentro del overlay.",
+                "Las imagenes se descargan al conectar y se guardan en config/streamchat-emotes."
+        ).push("emotes");
+
+        EMOTES_ENABLED = builder
+                .comment("Mostrar imagenes de emotes en lugar del texto :codigo:.")
+                .define("enabled", true);
+
+        EMOTES_ANIMATED = builder
+                .comment("Reproducir emotes animados (GIF) cuando el proveedor los ofrezca.")
+                .define("animated", true);
+
+        EMOTES_CHANNEL_SPECIFIC = builder
+                .comment("Cargar tambien los emotes propios del canal de Twitch/Kick.")
+                .define("channelSpecific", true);
+
+        EMOTES_SIZE = builder
+                .comment("Altura de cada emote en pixeles de GUI (el ancho mantiene la proporcion).")
+                .defineInRange("size", 12, 8, 28);
+
+        EMOTES_PROVIDERS = builder
+                .comment("Proveedores activos: bttv, ffz, 7tv.")
+                .defineListAllowEmpty("providers", List.of("bttv", "ffz", "7tv"),
+                        value -> value instanceof String);
+
+        builder.pop();
+
         SPEC = builder.build();
     }
 
@@ -280,6 +330,23 @@ public final class ChatConfig {
             announceStatus = ANNOUNCE_STATUS.get();
             platform = PLATFORM.get();
             channel = CHANNEL.get();
+
+            LinkedHashSet<String> parsedSources = new LinkedHashSet<>();
+            for (String entry : SOURCES.get()) {
+                ChatSource source = ChatSource.parse(entry);
+                if (source != null) {
+                    parsedSources.add(source.configValue());
+                }
+            }
+            List<ChatSource> parsed = new ArrayList<>();
+            for (String entry : parsedSources) {
+                ChatSource source = ChatSource.parse(entry);
+                if (source != null) {
+                    parsed.add(source);
+                }
+            }
+            sources = List.copyOf(parsed);
+
             showPlatformTag = SHOW_PLATFORM_TAG.get();
             showNameColors = SHOW_NAME_COLORS.get();
             ignoreCommands = IGNORE_COMMANDS.get();
@@ -314,6 +381,21 @@ public final class ChatConfig {
             overlayMessageFormat = OVERLAY_MESSAGE_FORMAT.get();
             overlaySystemPrefix = OVERLAY_SYSTEM_PREFIX.get();
 
+            emotesEnabled = EMOTES_ENABLED.get();
+            emotesAnimated = EMOTES_ANIMATED.get();
+            emotesChannelSpecific = EMOTES_CHANNEL_SPECIFIC.get();
+            emotesSize = EMOTES_SIZE.get();
+            Set<String> providers = new LinkedHashSet<>();
+            for (String entry : EMOTES_PROVIDERS.get()) {
+                if (entry != null) {
+                    String normalized = entry.trim().toLowerCase(Locale.ROOT);
+                    if (normalized.equals("bttv") || normalized.equals("ffz") || normalized.equals("7tv")) {
+                        providers.add(normalized);
+                    }
+                }
+            }
+            emoteProviders = Set.copyOf(providers);
+
             Set<String> blocked = new HashSet<>();
             for (String entry : BLOCKED_USERS.get()) {
                 if (entry != null && !entry.isBlank()) {
@@ -336,6 +418,92 @@ public final class ChatConfig {
         CHANNEL.set(value);
         CHANNEL.save();
         channel = value;
+    }
+
+    /**
+     * Fuentes realmente conectadas. Mantiene compatibilidad con los TOML
+     * antiguos que solo tenian platform/channel.
+     */
+    public static List<ChatSource> effectiveSources() {
+        if (!sources.isEmpty()) {
+            return sources;
+        }
+        if (channel == null || channel.isBlank()) {
+            return List.of();
+        }
+        ChatPlatform selected = ChatPlatform.byIdOrDefault(platform);
+        String normalized = ChannelNames.normalize(selected, channel);
+        if (normalized.isEmpty()) {
+            return List.of();
+        }
+        return List.of(new ChatSource(selected, normalized));
+    }
+
+    public static void setSources(List<ChatSource> newSources) {
+        LinkedHashSet<String> values = new LinkedHashSet<>();
+        for (ChatSource source : newSources) {
+            if (source != null) {
+                values.add(source.configValue());
+            }
+        }
+        SOURCES.set(new ArrayList<>(values));
+        SOURCES.save();
+        List<ChatSource> parsed = new ArrayList<>();
+        for (String value : values) {
+            ChatSource source = ChatSource.parse(value);
+            if (source != null) {
+                parsed.add(source);
+            }
+        }
+        sources = List.copyOf(parsed);
+    }
+
+    public static boolean addSource(ChatSource source) {
+        if (source == null) {
+            return false;
+        }
+        List<ChatSource> current = new ArrayList<>(effectiveSources());
+        for (ChatSource existing : current) {
+            if (existing.key().equals(source.key())) {
+                return false;
+            }
+        }
+        current.add(source);
+        setSources(current);
+        return true;
+    }
+
+    public static boolean removeSource(ChatPlatform platform, String channel) {
+        if (platform == null) {
+            return false;
+        }
+        String normalized = channel == null ? "" : ChannelNames.normalize(platform, channel);
+        List<ChatSource> current = new ArrayList<>(effectiveSources());
+        boolean changed = current.removeIf(source -> source.platform() == platform
+                && (normalized.isEmpty() || source.channel().equalsIgnoreCase(normalized)));
+        if (changed) {
+            setSources(current);
+        }
+        return changed;
+    }
+
+    public static void setEmotesEnabled(boolean value) {
+        EMOTES_ENABLED.set(value);
+        EMOTES_ENABLED.save();
+        emotesEnabled = value;
+    }
+
+    public static void setEmotesAnimated(boolean value) {
+        EMOTES_ANIMATED.set(value);
+        EMOTES_ANIMATED.save();
+        emotesAnimated = value;
+    }
+
+    public static void setEmotesSize(int value) {
+        int clamped = Math.max(8, Math.min(28, value));
+        EMOTES_SIZE.set(clamped);
+        EMOTES_SIZE.save();
+        emotesSize = clamped;
     }
 
     public static void setOverlayEnabled(boolean value) {

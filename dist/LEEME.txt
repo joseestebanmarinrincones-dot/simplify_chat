@@ -1,51 +1,48 @@
-Simplify Chat 1.0.0 - Minecraft 26.3 (Forge 26.3-66.1.2)
-=====================================================
+Simplify Chat 1.1.0 - Minecraft 26.3 (Forge 26.3-66.1.2)
+======================================================
 
 Contenido:
-- simplify_chat-1.0.0.jar              -> copiar a %APPDATA%\.minecraft\mods
+- simplify_chat-1.1.0.jar              -> copiar a %APPDATA%\.minecraft\mods
 - simplify_chat-tiktok-bridge.zip      -> descomprimir y ejecutar el puente (solo TikTok)
 
 Instalacion rapida:
 1. Forge 26.3-66.1.2 debe estar instalado y con un perfil en el launcher.
-2. Copia simplify_chat-1.0.0.jar a %APPDATA%\.minecraft\mods
+2. Copia simplify_chat-1.1.0.jar a %APPDATA%\.minecraft\mods
 3. Entra al mundo con el perfil de Forge.
 4. En el chat del juego:
-   /streamchat connect twitch TU_CANAL
-   /streamchat connect kick TU_CANAL
-   /streamchat connect tiktok TU_USUARIO
+   /streamchat add twitch TU_CANAL
+   /streamchat add kick TU_CANAL
+   /streamchat add tiktok TU_USUARIO
+
+Los tres chats pueden estar conectados a la vez.
+
+Emotes:
+- BTTV, FFZ y 7TV se muestran como imagenes reales.
+- Los GIF animados se reproducen dentro del overlay.
+- Se guardan en config/streamchat-emotes.
+- /streamchat emotes on|off
+- /streamchat emotes animated on|off
+- /streamchat emotes size 8-28
 
 Overlay:
 - Aparece arriba a la izquierda, transparente, con fade y colores.
 - Pulsa F7 dentro del juego para abrir el panel de ajustes (posicion, tamano,
-  opacidad, colores, formatos y vista previa). La tecla se cambia en
-  Opciones -> Controles -> Simplify Chat.
+  opacidad, colores, formatos, emotes y vista previa).
 - Tambien se personaliza con /streamchat overlay ... o con config/streamchat-client.toml.
-
-  /streamchat overlay position bottom_left
-  /streamchat overlay margin 20 10
-  /streamchat overlay scale 1.2
-  /streamchat overlay width 350
-  /streamchat overlay opacity 0.85
-  /streamchat overlay bgopacity 0.35
-  /streamchat overlay color message #FFFFFF
-  /streamchat overlay color background #000000
-  /streamchat overlay format {name} > {message}
-  /streamchat overlay tag [{platform}] 
-  /streamchat overlay on|off|clear
 
 TikTok:
 1. Descomprime simplify_chat-tiktok-bridge.zip.
-2. Ejecuta iniciar-puente.bat; si Windows lo bloquea, mirá LEEME-BLOQUEO.txt
+2. Ejecuta iniciar-puente.bat; si Windows lo bloquea, mira LEEME-BLOQUEO.txt
    o abri PowerShell en esa carpeta y ejecuta:
      npm install --no-audit --no-fund
      node bridge.mjs
-3. En Minecraft: /streamchat connect tiktok TU_USUARIO (debe estar en directo).
+3. En Minecraft: /streamchat add tiktok TU_USUARIO (debe estar en directo).
 
 Comandos:
+/streamchat sources
 /streamchat status
+/streamchat remove <plataforma> [canal]
 /streamchat disconnect
-/streamchat platform <twitch|kick|tiktok>
-/streamchat channel <canal>
 /streamchat test
 /streamchat panel
 /streamchat reload

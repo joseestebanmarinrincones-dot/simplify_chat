@@ -6,6 +6,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import dev.streamchat.chat.ChatManager;
 import dev.streamchat.chat.OverlayChat;
+import dev.streamchat.emote.EmoteManager;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -30,6 +31,21 @@ public final class StreamChatCommands {
                                 .then(Commands.argument("platform", StringArgumentType.word())
                                         .then(Commands.argument("channel", StringArgumentType.greedyString())
                                                 .executes(StreamChatCommands::connect))))
+                        .then(Commands.literal("add")
+                                .then(Commands.argument("platform", StringArgumentType.word())
+                                        .then(Commands.argument("channel", StringArgumentType.greedyString())
+                                                .executes(StreamChatCommands::addSource))))
+                        .then(Commands.literal("remove")
+                                .then(Commands.argument("platform", StringArgumentType.word())
+                                        .executes(context -> removeSource(context, ""))
+                                        .then(Commands.argument("channel", StringArgumentType.greedyString())
+                                                .executes(context -> removeSource(context,
+                                                        StringArgumentType.getString(context, "channel"))))))
+                        .then(Commands.literal("sources")
+                                .executes(context -> {
+                                    ok(context.getSource(), ChatManager.statusText());
+                                    return 1;
+                                }))
                         .then(Commands.literal("disconnect")
                                 .executes(context -> {
                                     ChatManager.disconnect(true);
@@ -49,9 +65,41 @@ public final class StreamChatCommands {
                         .then(Commands.literal("reload")
                                 .executes(context -> {
                                     ChatConfig.load();
+                                    EmoteManager.reload();
                                     ok(context.getSource(), "Configuracion recargada.");
                                     return 1;
                                 }))
+                        .then(Commands.literal("emotes")
+                                .executes(context -> {
+                                    ok(context.getSource(), "Emotes: " + (ChatConfig.emotesEnabled ? "activados" : "desactivados")
+                                            + " | Animados: " + (ChatConfig.emotesAnimated ? "si" : "no")
+                                            + " | Tamano: " + ChatConfig.emotesSize
+                                            + " | Proveedores: " + String.join(", ", ChatConfig.emoteProviders));
+                                    return 1;
+                                })
+                                .then(Commands.literal("on")
+                                        .executes(context -> setEmotes(context.getSource(), true)))
+                                .then(Commands.literal("off")
+                                        .executes(context -> setEmotes(context.getSource(), false)))
+                                .then(Commands.literal("animated")
+                                        .then(Commands.literal("on")
+                                                .executes(context -> setEmotesAnimated(context.getSource(), true)))
+                                        .then(Commands.literal("off")
+                                                .executes(context -> setEmotesAnimated(context.getSource(), false))))
+                                .then(Commands.literal("size")
+                                        .then(Commands.argument("value", IntegerArgumentType.integer(8, 28))
+                                                .executes(context -> {
+                                                    int value = IntegerArgumentType.getInteger(context, "value");
+                                                    ChatConfig.setEmotesSize(value);
+                                                    ok(context.getSource(), "Tamano de emote guardado: " + ChatConfig.emotesSize);
+                                                    return 1;
+                                                })))
+                                .then(Commands.literal("reload")
+                                        .executes(context -> {
+                                            EmoteManager.reload();
+                                            ok(context.getSource(), "Recargando emotes...");
+                                            return 1;
+                                        })))
                         .then(Commands.literal("test")
                                 .executes(context -> {
                                     ChatManager.test();
@@ -130,6 +178,53 @@ public final class StreamChatCommands {
         ChatManager.connect(platform, channel, true);
         ok(source, "Conectando a " + platform.displayName() + ": "
                 + (platform == ChatPlatform.TIKTOK ? "@" + channel : channel));
+        return 1;
+    }
+
+    private static int addSource(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        ChatPlatform platform = ChatPlatform.byId(StringArgumentType.getString(context, "platform"));
+        if (platform == null) {
+            fail(source, "Plataforma desconocida. Usa twitch, kick o tiktok.");
+            return 0;
+        }
+        String channel = ChannelNames.normalize(platform, StringArgumentType.getString(context, "channel"));
+        if (channel.isEmpty()) {
+            fail(source, "El canal esta vacio.");
+            return 0;
+        }
+        ChatManager.connect(platform, channel, true);
+        ok(source, "Chat agregado: " + platform.displayName() + " " + channel);
+        return 1;
+    }
+
+    private static int removeSource(CommandContext<CommandSourceStack> context, String channel) {
+        CommandSourceStack source = context.getSource();
+        ChatPlatform platform = ChatPlatform.byId(StringArgumentType.getString(context, "platform"));
+        if (platform == null) {
+            fail(source, "Plataforma desconocida. Usa twitch, kick o tiktok.");
+            return 0;
+        }
+        if (!ChatConfig.removeSource(platform, channel)) {
+            fail(source, "No habia ningun chat configurado para " + platform.displayName() + ".");
+            return 0;
+        }
+        ChatManager.connectConfigured(false);
+        ok(source, "Chat eliminado. Quedan " + ChatConfig.effectiveSources().size() + ".");
+        return 1;
+    }
+
+    private static int setEmotes(CommandSourceStack source, boolean enabled) {
+        ChatConfig.setEmotesEnabled(enabled);
+        EmoteManager.reload();
+        ok(source, enabled ? "Emotes activados." : "Emotes desactivados.");
+        return 1;
+    }
+
+    private static int setEmotesAnimated(CommandSourceStack source, boolean enabled) {
+        ChatConfig.setEmotesAnimated(enabled);
+        EmoteManager.reload();
+        ok(source, enabled ? "Emotes animados activados." : "Emotes animados desactivados.");
         return 1;
     }
 
@@ -267,12 +362,15 @@ public final class StreamChatCommands {
     }
 
     private static int help(CommandSourceStack source) {
-        ok(source, "Simplify Chat 1.0.0 - comandos:");
-        line(source, "/streamchat connect [plataforma] [canal]", "Conecta (twitch, kick o tiktok).");
-        line(source, "/streamchat disconnect", "Cierra la conexion actual.");
-        line(source, "/streamchat status", "Muestra plataforma, canal y estado.");
-        line(source, "/streamchat platform <twitch|kick|tiktok>", "Cambia la plataforma guardada.");
-        line(source, "/streamchat channel <canal>", "Cambia el canal guardado.");
+        ok(source, "Simplify Chat 1.1.0 - comandos:");
+        line(source, "/streamchat add <twitch|kick|tiktok> <canal>", "Agrega un chat sin quitar los demas.");
+        line(source, "/streamchat remove <plataforma> [canal]", "Quita un chat configurado.");
+        line(source, "/streamchat connect [plataforma] [canal]", "Conecta un chat o todos los configurados.");
+        line(source, "/streamchat sources | status", "Lista los chats y su estado.");
+        line(source, "/streamchat disconnect", "Cierra todas las conexiones.");
+        line(source, "/streamchat emotes on|off|animated on|off|size <8-28>|reload", "Ajustes de emotes.");
+        line(source, "/streamchat platform <twitch|kick|tiktok>", "Cambia la plataforma guardada antigua.");
+        line(source, "/streamchat channel <canal>", "Cambia el canal guardado antiguo.");
         line(source, "/streamchat test", "Muestra un mensaje de prueba.");
         line(source, "/streamchat panel", "Abre el panel de apariencia (tambien F7).");
         line(source, "/streamchat overlay [on|off|clear]", "Activa, desactiva o limpia el overlay.");

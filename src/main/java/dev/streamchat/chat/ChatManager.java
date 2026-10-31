@@ -4,8 +4,10 @@ import com.mojang.logging.LogUtils;
 import dev.streamchat.ChatConfig;
 import dev.streamchat.ChatMessage;
 import dev.streamchat.ChatPlatform;
+import dev.streamchat.ChatSource;
 import dev.streamchat.ChannelNames;
 import dev.streamchat.TextUtil;
+import dev.streamchat.emote.EmoteManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
@@ -13,48 +15,32 @@ import net.minecraft.network.chat.TextColor;
 import org.slf4j.Logger;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
- * Orquesta la conexion activa y pinta los mensajes en el chat del cliente.
- * Todos los metodos que tocan Minecraft se ejecutan en el hilo del juego.
+ * Orquesta todas las conexiones activas (Twitch, Kick y TikTok a la vez) y
+ * pinta los mensajes en el overlay. Todos los metodos que tocan Minecraft se
+ * ejecutan en el hilo del juego.
  */
 public final class ChatManager {
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final Deque<Long> MESSAGE_TIMES = new ArrayDeque<>();
+    private static final Map<String, Connection> CONNECTIONS = new LinkedHashMap<>();
 
-    private static volatile ChatClient client;
     private static ChatPlatform platform = ChatPlatform.TWITCH;
     private static String channel = "";
-    private static String state = "desconectado";
-    private static String lastStatus = "";
-    private static String lastError = "";
-    private static long lastErrorAt = 0L;
     private static int autoConnectDelay = -1;
-
-    private static final ChatListener LISTENER = new ChatListener() {
-        @Override
-        public void onMessage(ChatMessage message) {
-            display(message);
-        }
-
-        @Override
-        public void onStatus(String status) {
-            onClient(() -> handleStatus(status));
-        }
-
-        @Override
-        public void onError(String error) {
-            onClient(() -> handleError(error));
-        }
-    };
 
     private ChatManager() {
     }
 
     public static void onJoin() {
-        if (ChatConfig.enabled && !ChatConfig.channel.isBlank()) {
+        if (ChatConfig.enabled && !ChatConfig.effectiveSources().isEmpty()) {
             // Dar un margen para que el chat del cliente termine de inicializarse.
             autoConnectDelay = 60;
         }
@@ -67,6 +53,7 @@ public final class ChatManager {
 
     public static void tick() {
         OverlayChat.prune();
+        EmoteManager.tick();
         if (autoConnectDelay > 0) {
             autoConnectDelay--;
             if (autoConnectDelay == 0) {
@@ -79,15 +66,22 @@ public final class ChatManager {
     }
 
     public static void connectConfigured(boolean announceErrors) {
-        ChatPlatform selected = ChatPlatform.byIdOrDefault(ChatConfig.platform);
-        String normalized = ChannelNames.normalize(selected, ChatConfig.channel);
-        if (normalized.isEmpty()) {
+        List<ChatSource> sources = ChatConfig.effectiveSources();
+        if (sources.isEmpty()) {
             if (announceErrors) {
-                announceRaw("No hay ningun canal configurado. Usa /streamchat connect <twitch|kick|tiktok> <canal>.", true);
+                announceRaw("No hay ningun chat configurado. Usa /streamchat add <twitch|kick|tiktok> <canal>.", true);
             }
             return;
         }
-        connect(selected, normalized, false);
+
+        closeConnections();
+        for (ChatSource source : sources) {
+            start(source);
+        }
+        EmoteManager.configure(sources);
+
+        String summary = String.join(", ", sources.stream().map(ChatSource::display).toList());
+        announceRaw("Conectando " + sources.size() + " chat" + (sources.size() == 1 ? "" : "s") + ": " + summary, false);
     }
 
     public static void connect(ChatPlatform selected, String rawChannel, boolean save) {
@@ -97,51 +91,73 @@ public final class ChatManager {
             return;
         }
 
-        disconnect(false);
-
-        platform = selected;
-        channel = normalized;
-        state = "conectando";
-        lastStatus = "";
-        lastError = "";
-        lastErrorAt = 0L;
-
+        ChatSource source = new ChatSource(selected, normalized);
         if (save) {
-            ChatConfig.setPlatform(selected.id());
-            ChatConfig.setChannel(channel);
+            ChatConfig.addSource(source);
+            platform = selected;
+            channel = normalized;
+            connectConfigured(false);
+        } else {
+            start(source);
+            EmoteManager.configure(ChatConfig.effectiveSources());
+            announceRaw("Conectando a " + source.display(), false);
         }
+    }
 
-        announceRaw("Conectando a " + selected.displayName() + ": " + displayChannel(), false);
+    private static void start(ChatSource source) {
+        String key = source.key();
+        Connection connection = new Connection(source);
+        CONNECTIONS.put(key, connection);
 
         try {
-            client = switch (selected) {
-                case TWITCH -> new TwitchChatClient(channel, LISTENER);
-                case KICK -> new KickChatClient(channel, LISTENER);
-                case TIKTOK -> new TikTokBridgeClient(ChatConfig.tiktokBridgeUrl, channel, LISTENER);
+            ChatListener listener = new ChatListener() {
+                @Override
+                public void onMessage(ChatMessage message) {
+                    display(message);
+                }
+
+                @Override
+                public void onStatus(String status) {
+                    onClient(() -> handleStatus(connection, status));
+                }
+
+                @Override
+                public void onError(String error) {
+                    onClient(() -> handleError(connection, error));
+                }
             };
-            client.start();
+
+            connection.client = switch (source.platform()) {
+                case TWITCH -> new TwitchChatClient(source.channel(), listener);
+                case KICK -> new KickChatClient(source.channel(), listener);
+                case TIKTOK -> new TikTokBridgeClient(ChatConfig.tiktokBridgeUrl, source.channel(), listener);
+            };
+            connection.client.start();
         } catch (Exception exception) {
-            client = null;
-            state = "error";
-            announceRaw("No se pudo iniciar la conexion: " + exception.getMessage(), true);
+            connection.client = null;
+            connection.state = "error";
+            announceRaw("No se pudo iniciar " + source.display() + ": " + exception.getMessage(), true);
         }
     }
 
     public static void disconnect(boolean announce) {
-        ChatClient old = client;
-        client = null;
-        if (old != null) {
-            try {
-                old.stop();
-            } catch (Exception exception) {
-                LOGGER.warn("Error cerrando el cliente de chat", exception);
-            }
-        }
-        state = "desconectado";
-        lastStatus = "";
+        closeConnections();
         if (announce) {
             announceRaw("Desconectado.", false);
         }
+    }
+
+    private static void closeConnections() {
+        for (Connection connection : CONNECTIONS.values()) {
+            if (connection.client != null) {
+                try {
+                    connection.client.stop();
+                } catch (Exception exception) {
+                    LOGGER.warn("Error cerrando el cliente de chat de {}", connection.source.display(), exception);
+                }
+            }
+        }
+        CONNECTIONS.clear();
     }
 
     public static void display(ChatMessage message) {
@@ -173,8 +189,13 @@ public final class ChatManager {
             return;
         }
 
-        MutableComponent line = MessageFormatter.format(message);
-        deliver(line, false, false);
+        ChatMessage cleaned = new ChatMessage(message.platform(), message.user(), body, message.colorHex());
+        if (ChatConfig.overlayEnabled) {
+            OverlayChat.add(cleaned, false, false);
+        }
+        if (!ChatConfig.overlayEnabled || ChatConfig.overlayMirrorVanilla) {
+            addChat(MessageFormatter.format(cleaned));
+        }
     }
 
     private static boolean allowMessage() {
@@ -193,30 +214,30 @@ public final class ChatManager {
         return true;
     }
 
-    private static void handleStatus(String status) {
-        if (status == null || status.isBlank() || status.equals(lastStatus)) {
+    private static void handleStatus(Connection connection, String status) {
+        if (status == null || status.isBlank() || status.equals(connection.lastStatus)) {
             return;
         }
-        lastStatus = status;
-        state = status;
+        connection.lastStatus = status;
+        connection.state = status;
         if (ChatConfig.announceStatus) {
-            announceRaw(status, false);
+            announceRaw(connection.source.platform().displayName() + " (" + connection.source.displayChannel() + "): " + status, false);
         }
     }
 
-    private static void handleError(String error) {
+    private static void handleError(Connection connection, String error) {
         if (error == null || error.isBlank()) {
             return;
         }
         long now = System.currentTimeMillis();
-        if (error.equals(lastError) && now - lastErrorAt < 10_000L) {
+        if (error.equals(connection.lastError) && now - connection.lastErrorAt < 10_000L) {
             return;
         }
-        lastError = error;
-        lastErrorAt = now;
-        state = "error";
+        connection.lastError = error;
+        connection.lastErrorAt = now;
+        connection.state = "error";
         if (ChatConfig.announceStatus) {
-            announceRaw(error, true);
+            announceRaw(connection.source.platform().displayName() + " (" + connection.source.displayChannel() + "): " + error, true);
         }
     }
 
@@ -226,15 +247,6 @@ public final class ChatManager {
             return;
         }
         minecraft.gui.hud.getChat().addClientSystemMessage(component);
-    }
-
-    private static void deliver(Component component, boolean system, boolean error) {
-        if (ChatConfig.overlayEnabled) {
-            OverlayChat.add(component, system, error);
-        }
-        if (!ChatConfig.overlayEnabled || ChatConfig.overlayMirrorVanilla) {
-            addChat(component);
-        }
     }
 
     private static void onClient(Runnable task) {
@@ -248,33 +260,72 @@ public final class ChatManager {
     public static void announceRaw(String text, boolean error) {
         int color = error ? ChatConfig.overlayErrorColor : ChatConfig.overlaySystemColor;
         String prefix = ChatConfig.overlaySystemPrefix == null ? "" : ChatConfig.overlaySystemPrefix;
-        MutableComponent line = Component.literal(prefix)
-                .withStyle(style -> style.withColor(TextColor.fromRgb(color)));
-        line.append(Component.literal(text)
-                .withStyle(style -> style.withColor(TextColor.fromRgb(color))));
-        onClient(() -> deliver(line, true, error));
+        String line = prefix + text;
+        onClient(() -> {
+            if (ChatConfig.overlayEnabled) {
+                OverlayChat.addSystem(line, color, error);
+            }
+            if (!ChatConfig.overlayEnabled || ChatConfig.overlayMirrorVanilla) {
+                MutableComponent component = Component.literal(line)
+                        .withStyle(style -> style.withColor(TextColor.fromRgb(color)));
+                addChat(component);
+            }
+        });
     }
 
     public static void test() {
-        display(new ChatMessage(platform, "StreamChat", "Mensaje de prueba: el chat se ve correctamente.", "#55FF55"));
+        List<ChatSource> sources = ChatConfig.effectiveSources();
+        ChatSource source = sources.isEmpty() ? new ChatSource(platform, channel) : sources.get(0);
+        display(new ChatMessage(source.platform(), "Simplify", "Mensaje de prueba :tf: el chat y los emotes se ven correctamente.", "#55FF55"));
     }
 
     public static String statusText() {
-        String shownChannel = channel.isBlank() ? "(sin configurar)" : displayChannel();
-        String bridge = platform == ChatPlatform.TIKTOK ? " | Puente: " + ChatConfig.tiktokBridgeUrl : "";
-        return "Plataforma: " + platform.displayName() + " | Canal: " + shownChannel
-                + " | Estado: " + state + bridge;
+        List<ChatSource> configured = ChatConfig.effectiveSources();
+        if (configured.isEmpty() && CONNECTIONS.isEmpty()) {
+            return "No hay chats configurados. Usa /streamchat add <twitch|kick|tiktok> <canal>.";
+        }
+        StringBuilder builder = new StringBuilder();
+        if (CONNECTIONS.isEmpty()) {
+            builder.append("Chats configurados: ").append(configured.size());
+        } else {
+            builder.append("Chats activos: ").append(CONNECTIONS.size());
+        }
+        for (Connection connection : CONNECTIONS.values()) {
+            builder.append('\n').append("- ").append(connection.source.display())
+                    .append(" | ").append(connection.state);
+        }
+        if (CONNECTIONS.isEmpty()) {
+            for (ChatSource source : configured) {
+                builder.append('\n').append("- ").append(source.display());
+            }
+        }
+        return builder.toString();
     }
 
     public static ChatPlatform platform() {
-        return platform;
+        List<ChatSource> sources = ChatConfig.effectiveSources();
+        return sources.isEmpty() ? platform : sources.get(0).platform();
     }
 
     public static String channel() {
-        return channel;
+        List<ChatSource> sources = ChatConfig.effectiveSources();
+        return sources.isEmpty() ? channel : sources.get(0).channel();
     }
 
-    private static String displayChannel() {
-        return platform == ChatPlatform.TIKTOK ? "@" + channel : channel;
+    public static int connectionCount() {
+        return CONNECTIONS.size();
+    }
+
+    private static final class Connection {
+        private final ChatSource source;
+        private ChatClient client;
+        private String state = "conectando";
+        private String lastStatus = "";
+        private String lastError = "";
+        private long lastErrorAt = 0L;
+
+        private Connection(ChatSource source) {
+            this.source = source;
+        }
     }
 }

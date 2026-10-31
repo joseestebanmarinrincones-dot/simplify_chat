@@ -4,6 +4,7 @@ import dev.streamchat.ChatConfig;
 import dev.streamchat.ChatMessage;
 import dev.streamchat.ChatPlatform;
 import dev.streamchat.chat.MessageFormatter;
+import dev.streamchat.emote.EmoteManager;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
@@ -136,6 +137,25 @@ public final class OverlayConfigScreen extends Screen {
         addRenderableWidget(this.colorBox);
 
         addButton("Aplicar", this.contentX + this.contentW - 52, colorY, 52, button -> applyColor());
+
+        addValueRow("Tamano de emote", this.contentX, top + 132, this.contentW,
+                () -> String.valueOf(ChatConfig.emotesSize),
+                () -> ChatConfig.setEmotesSize(ChatConfig.emotesSize - 2),
+                () -> ChatConfig.setEmotesSize(ChatConfig.emotesSize + 2));
+
+        int toggleWidth = this.contentW / 2 - 3;
+        addButton(ChatConfig.emotesEnabled ? "Emotes: SI" : "Emotes: NO",
+                this.contentX, top + 156, toggleWidth, button -> {
+                    ChatConfig.setEmotesEnabled(!ChatConfig.emotesEnabled);
+                    EmoteManager.reload();
+                    this.rebuildWidgets();
+                });
+        addButton(ChatConfig.emotesAnimated ? "Animados: SI" : "Animados: NO",
+                this.contentX + this.contentW - toggleWidth, top + 156, toggleWidth, button -> {
+                    ChatConfig.setEmotesAnimated(!ChatConfig.emotesAnimated);
+                    EmoteManager.reload();
+                    this.rebuildWidgets();
+                });
     }
 
     private void buildTextPage(int top) {

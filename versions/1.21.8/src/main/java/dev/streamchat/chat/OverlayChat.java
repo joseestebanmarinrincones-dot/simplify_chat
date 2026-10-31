@@ -1,7 +1,7 @@
 package dev.streamchat.chat;
 
 import dev.streamchat.ChatConfig;
-import net.minecraft.network.chat.Component;
+import dev.streamchat.ChatMessage;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -17,15 +17,27 @@ public final class OverlayChat {
     private OverlayChat() {
     }
 
-    public static void add(Component component, boolean system, boolean error) {
-        long now = System.currentTimeMillis();
-        LINES.addLast(new Line(component, now, system, error));
+    public static void add(ChatMessage message, boolean system, boolean error) {
+        if (message == null) {
+            return;
+        }
+        addLine(new Line(message, null, 0, 0L, system, error));
+    }
 
+    public static void addSystem(String text, int color, boolean error) {
+        if (text == null || text.isBlank()) {
+            return;
+        }
+        addLine(new Line(null, text, color, 0L, true, error));
+    }
+
+    private static void addLine(Line line) {
+        LINES.addLast(line);
         int max = Math.max(1, ChatConfig.overlayMaxMessages);
         while (LINES.size() > max) {
             LINES.removeFirst();
         }
-        prune(now);
+        prune(line.createdAt());
     }
 
     public static void prune() {
@@ -45,6 +57,10 @@ public final class OverlayChat {
         LINES.clear();
     }
 
-    public record Line(Component component, long createdAt, boolean system, boolean error) {
+    public record Line(ChatMessage message, String text, int color, long createdAt,
+                       boolean system, boolean error) {
+        public Line {
+            createdAt = createdAt == 0L ? System.currentTimeMillis() : createdAt;
+        }
     }
 }

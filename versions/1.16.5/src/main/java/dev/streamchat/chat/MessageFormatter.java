@@ -4,15 +4,39 @@ import dev.streamchat.ChatConfig;
 import dev.streamchat.ChatMessage;
 import dev.streamchat.ChatPlatform;
 import dev.streamchat.TextUtil;
-import net.minecraft.util.text.Color;
-import net.minecraft.util.text.IFormattableTextComponent;
+import dev.streamchat.emote.Emote;
+import dev.streamchat.emote.EmoteManager;
+import net.minecraft.util.text.ITextComponent;
 import net.minecraft.util.text.StringTextComponent;
+import net.minecraft.util.text.TextFormatting;
+import net.minecraft.util.text.Color;
 
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Convierte un mensaje de plataforma en partes de texto/emote.
+ * Placeholders: {tag}, {platform}, {name}, {message}
+ */
 public final class MessageFormatter {
     private MessageFormatter() {
     }
 
-    public static IFormattableTextComponent format(ChatMessage message) {
+    public static ITextComponent format(ChatMessage message) {
+        StringTextComponent result = new StringTextComponent("");
+        for (ChatPart part : parts(message)) {
+            if (part instanceof ChatPart.Text) {
+                ChatPart.Text text = (ChatPart.Text) part;
+                result.append(literal(text.text(), text.color()));
+            } else if (part instanceof ChatPart.Emote) {
+                ChatPart.Emote emote = (ChatPart.Emote) part;
+                result.append(literal(emote.code(), ChatConfig.overlayMessageColor));
+            }
+        }
+        return result;
+    }
+
+    public static List<ChatPart> parts(ChatMessage message) {
         ChatPlatform platform = message.platform();
         int platformColor = ChatConfig.colorFor(platform);
         int separatorColor = ChatConfig.overlaySeparatorColor;
@@ -37,48 +61,76 @@ public final class MessageFormatter {
             format = "{tag}{name}: {message}";
         }
 
-        IFormattableTextComponent result = new StringTextComponent("");
+        List<ChatPart> result = new ArrayList<>();
         boolean usedMessage = false;
         int index = 0;
 
         while (index < format.length()) {
             int open = format.indexOf('{', index);
             if (open < 0) {
-                result.append(literal(format.substring(index), separatorColor));
+                result.add(new ChatPart.Text(format.substring(index), separatorColor));
                 break;
             }
             if (open > index) {
-                result.append(literal(format.substring(index, open), separatorColor));
+                result.add(new ChatPart.Text(format.substring(index, open), separatorColor));
             }
+
             int close = format.indexOf('}', open + 1);
             if (close < 0) {
-                result.append(literal(format.substring(open), separatorColor));
+                result.add(new ChatPart.Text(format.substring(open), separatorColor));
                 break;
             }
+
             String key = format.substring(open + 1, close);
             if ("tag".equals(key) || "platformTag".equals(key)) {
-                result.append(literal(tag, platformColor));
+                result.add(new ChatPart.Text(tag, platformColor));
             } else if ("platform".equals(key)) {
-                result.append(literal(platform.displayName(), platformColor));
+                result.add(new ChatPart.Text(platform.displayName(), platformColor));
             } else if ("name".equals(key) || "user".equals(key)) {
-                result.append(literal(name, nameColor));
+                result.add(new ChatPart.Text(name, nameColor));
             } else if ("message".equals(key)) {
-                result.append(literal(body, ChatConfig.overlayMessageColor));
+                appendMessage(result, body, ChatConfig.overlayMessageColor);
                 usedMessage = true;
             } else {
-                result.append(literal(format.substring(open, close + 1), separatorColor));
+                result.add(new ChatPart.Text(format.substring(open, close + 1), separatorColor));
             }
             index = close + 1;
         }
 
         if (!usedMessage) {
-            result.append(literal(" ", separatorColor));
-            result.append(literal(body, ChatConfig.overlayMessageColor));
+            result.add(new ChatPart.Text(" ", separatorColor));
+            appendMessage(result, body, ChatConfig.overlayMessageColor);
         }
+
         return result;
     }
 
-    private static IFormattableTextComponent literal(String text, int rgb) {
-        return new StringTextComponent(text).withStyle(style -> style.withColor(Color.fromRgb(rgb)));
+    private static void appendMessage(List<ChatPart> target, String body, int color) {
+        if (body == null || body.isEmpty()) {
+            return;
+        }
+        int index = 0;
+        while (index < body.length()) {
+            int start = index;
+            boolean space = Character.isWhitespace(body.charAt(index));
+            while (index < body.length() && Character.isWhitespace(body.charAt(index)) == space) {
+                index++;
+            }
+            String token = body.substring(start, index);
+            if (!space) {
+                Emote emote = EmoteManager.resolve(token);
+                if (emote != null) {
+                    target.add(new ChatPart.Emote(token));
+                    continue;
+                }
+            }
+            target.add(new ChatPart.Text(token, color));
+        }
+    }
+
+    private static StringTextComponent literal(String text, int rgb) {
+        StringTextComponent component = new StringTextComponent(text);
+        component.setStyle(component.getStyle().withColor(Color.fromRgb(rgb)));
+        return component;
     }
 }
