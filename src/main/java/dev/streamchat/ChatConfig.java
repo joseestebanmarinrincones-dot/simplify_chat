@@ -483,6 +483,11 @@ public final class ChatConfig {
                 && (normalized.isEmpty() || source.channel().equalsIgnoreCase(normalized)));
         if (changed) {
             setSources(current);
+            if (current.isEmpty()) {
+                CHANNEL.set("");
+                CHANNEL.save();
+                channel = "";
+            }
         }
         return changed;
     }

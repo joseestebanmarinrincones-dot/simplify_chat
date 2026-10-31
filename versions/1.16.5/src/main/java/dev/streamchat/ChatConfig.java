@@ -490,6 +490,11 @@ public final class ChatConfig {
         }
         if (changed) {
             setSources(current);
+            if (current.isEmpty()) {
+                CHANNEL.set("");
+                CHANNEL.save();
+                channel = "";
+            }
         }
         return changed;
     }

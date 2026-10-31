@@ -35,9 +35,9 @@ gradlew.bat build
 El jar queda en `versions/1.20.1/build/libs/`.
 ## Requisitos
 
-- Minecraft **26.3**
-- Forge **26.3-66.1.2** (o superior dentro de 26.3)
-- Java **25** (obligatorio para Minecraft 26.1+)
+- Minecraft **1.16.5**, **1.20.1**, **1.21.1**, **1.21.8** o **26.3** (usa el jar de tu version)
+- La version de Forge indicada en la tabla de arriba
+- Java 11+ para 1.16.5; Java 17 para 1.20.1; Java 21 para 1.21.x; Java 25 para 26.3
 - Para TikTok: Node.js 20 o superior
 
 > El mod es `clientSideOnly`: funciona en un mundo local y tambien en servidores, sin instalar
