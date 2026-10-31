@@ -29,6 +29,7 @@ public final class ChatManager {
     private static final Logger LOGGER = LogManager.getLogger();
     private static final Deque<Long> MESSAGE_TIMES = new ArrayDeque<>();
     private static final Map<String, Connection> CONNECTIONS = new LinkedHashMap<>();
+    private static final Map<String, Long> RECENT_TIKTOK = new java.util.HashMap<>();
 
     private static ChatPlatform platform = ChatPlatform.TWITCH;
     private static String channel = "";
@@ -203,6 +204,23 @@ public final class ChatManager {
         }
     }
 
+    /**
+     * El puente ya deduplica, pero al reconectar pueden quedar mensajes en vuelo
+     * o dos sockets solapados. Esta ventana evita pintar el mismo TikTok dos veces.
+     */
+    private static boolean acceptTikTok(String user, String body) {
+        long now = System.currentTimeMillis();
+        String key = (user == null ? "" : user.toLowerCase(Locale.ROOT)) + '|' + body;
+        Long previous = RECENT_TIKTOK.get(key);
+        if (previous != null && now - previous < 3000L) {
+            return false;
+        }
+        RECENT_TIKTOK.put(key, now);
+        if (RECENT_TIKTOK.size() > 500) {
+            RECENT_TIKTOK.entrySet().removeIf(entry -> now - entry.getValue() > 10_000L);
+        }
+        return true;
+    }
     private static boolean allowMessage() {
         int limit = ChatConfig.maxMessagesPerSecond;
         if (limit <= 0) {
